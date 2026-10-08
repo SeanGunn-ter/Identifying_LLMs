@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn.functional as F
+from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 from sklearn.metrics import accuracy_score, confusion_matrix, f1_score
 from torch import nn
 from torch.nn.utils.rnn import pad_sequence
@@ -41,14 +42,52 @@ def tokenize(text):
     return TOKEN_RE.findall(text.lower())
 
 
-def get_tokens(row, mode):
+ABLATIONS = [
+    "none",
+    "no_newlines",  # drop line breaks (paragraph/list layout)
+    "no_punct",  # drop punctuation and line breaks
+    "no_markdown",  # drop markdown symbols (* # ` - _ > |) and line breaks
+    "shuffle",  # random word order: keeps vocabulary, destroys syntax/phrases
+    "function_only",  # keep stopwords/punctuation/newlines, mask content words
+    "content_only",  # drop stopwords/punctuation/newlines, keep content words
+    "skip_first10",  # drop the opening 10 tokens (e.g. "Sure, here is ...")
+    "first32",  # only the first 32 tokens (controls for length)
+]
+MARKDOWN = set("*#`-_>|~")
+STOP = set(ENGLISH_STOP_WORDS)
+
+
+def ablate_tokens(toks, ablate, seed):
+    if ablate == "no_newlines":
+        return [t for t in toks if t != "\n"]
+    if ablate == "no_punct":
+        return [t for t in toks if re.match(r"\w", t)]
+    if ablate == "no_markdown":
+        return [t for t in toks if t != "\n" and t not in MARKDOWN]
+    if ablate == "shuffle":
+        toks = list(toks)
+        random.Random(seed).shuffle(toks)
+        return toks
+    if ablate == "function_only":
+        return [t if (t in STOP or not re.match(r"\w", t)) else "<unk>" for t in toks]
+    if ablate == "content_only":
+        return [t for t in toks if re.match(r"\w", t) and t not in STOP]
+    if ablate == "skip_first10":
+        return toks[10:]
+    if ablate == "first32":
+        return toks[:32]
+    return toks
+
+
+def get_tokens(row, mode, ablate="none"):
     toks = []
     if mode in ("input", "both"):
         toks += tokenize(row.llm_input)[: 256 if mode == "input" else 64]
     if mode == "both":
         toks.append("<sep>")
     if mode in ("output", "both"):
-        toks += tokenize(row.llm_output)[:MAX_OUTPUT]
+        out = tokenize(row.llm_output)[:MAX_OUTPUT]
+        toks += ablate_tokens(out, ablate, row.Index)
     return toks
 
 
@@ -96,6 +135,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", choices=["cnn", "lstm"], required=True)
     ap.add_argument("--mode", choices=["output", "input", "both"], default="output")
+    ap.add_argument("--ablate", choices=ABLATIONS, default="none")
     ap.add_argument("--epochs", type=int, default=15)
     ap.add_argument("--patience", type=int, default=3)
     ap.add_argument("--batch_size", type=int, default=64)
@@ -109,7 +149,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     df = pd.read_csv(DATA)
-    df["tokens"] = [get_tokens(r, args.mode) for r in df.itertuples()]
+    df["tokens"] = [get_tokens(r, args.mode, args.ablate) for r in df.itertuples()]
     classes = sorted(df.llm_name.unique())
     label_of = {c: i for i, c in enumerate(classes)}
 
@@ -144,7 +184,7 @@ def main():
     model = Model(len(itos), len(classes)).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     print(
-        f"{args.model} | mode={args.mode} | vocab={len(itos)} | "
+        f"{args.model} | mode={args.mode} | ablate={args.ablate} | vocab={len(itos)} | "
         f"params={sum(p.numel() for p in model.parameters()):,} | device={device}"
     )
 
@@ -176,6 +216,7 @@ def main():
     result = {
         "model": args.model,
         "mode": args.mode,
+        "ablate": args.ablate,
         "seed": args.seed,
         "best_epoch": best_epoch,
         "val_acc": best_val,
@@ -191,7 +232,8 @@ def main():
     print(np.array(result["confusion_matrix"]))
 
     RESULTS.mkdir(exist_ok=True)
-    out = RESULTS / f"{args.model}_{args.mode}_seed{args.seed}.json"
+    tag = "" if args.ablate == "none" else f"_{args.ablate}"
+    out = RESULTS / f"{args.model}_{args.mode}{tag}_seed{args.seed}.json"
     out.write_text(json.dumps(result, indent=2))
     print(f"saved {out}")
 

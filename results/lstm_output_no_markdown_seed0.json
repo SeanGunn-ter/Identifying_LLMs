@@ -1,0 +1,32 @@
+{
+  "model": "lstm",
+  "mode": "output",
+  "ablate": "no_markdown",
+  "seed": 0,
+  "best_epoch": 19,
+  "val_acc": 0.746268656716418,
+  "test_acc": 0.731245923026745,
+  "test_macro_f1": 0.7296969234330262,
+  "classes": [
+    "Claude",
+    "GPT",
+    "Gemini"
+  ],
+  "confusion_matrix": [
+    [
+      436,
+      38,
+      46
+    ],
+    [
+      39,
+      375,
+      112
+    ],
+    [
+      38,
+      139,
+      310
+    ]
+  ]
+}

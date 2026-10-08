@@ -1,0 +1,32 @@
+{
+  "model": "cnn",
+  "mode": "output",
+  "ablate": "shuffle",
+  "seed": 0,
+  "best_epoch": 5,
+  "val_acc": 0.6987788331071914,
+  "test_acc": 0.6829745596868885,
+  "test_macro_f1": 0.6824202703513021,
+  "classes": [
+    "Claude",
+    "GPT",
+    "Gemini"
+  ],
+  "confusion_matrix": [
+    [
+      383,
+      73,
+      64
+    ],
+    [
+      78,
+      305,
+      143
+    ],
+    [
+      38,
+      90,
+      359
+    ]
+  ]
+}
