@@ -1,5 +1,7 @@
 ﻿# Who Wrote It? Identifying LLMs from Their Responses
 
+Group: Sean Gunn (smg7277@psu.edu)
+
 # Dataset
 
 **Source:** LMSYS Chatbot Arena 55k (`lmarena-ai/arena-human-preference-55k`),
